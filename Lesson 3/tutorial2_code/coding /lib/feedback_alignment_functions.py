@@ -11,7 +11,6 @@ class LinearFunctionFA(Function):
         if b is not None:
             Z = Z + b
         return Z
-
     @staticmethod
     def backward(ctx, grad_Z):
         A, W, B, b = ctx.saved_tensors

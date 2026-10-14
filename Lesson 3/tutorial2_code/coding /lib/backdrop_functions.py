@@ -36,7 +36,6 @@ class SigmoidFunction(Function):
         ctx.save_for_backward(Z)
         A = torch.sigmoid(Z)
         return A
-
     @staticmethod
     def backward(ctx, grad_A):
         Z, = ctx.saved_tensors
@@ -54,7 +53,6 @@ class MSELossFunction(Function):
         ctx.save_for_backward(A, T)
         L = 0.5 * ((A - T) ** 2).sum() / A.shape[0]
         return L
-
     @staticmethod
     def backward(ctx, grad_L):
         A, T = ctx.saved_tensors

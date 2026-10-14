@@ -2,7 +2,7 @@ PWD /Users/ellacapellini/Desktop/Learning in Deep Artificial and Biological neur
 INPUT /usr/local/texlive/2025/texmf.cnf
 INPUT /usr/local/texlive/2025/texmf-dist/web2c/texmf.cnf
 INPUT /usr/local/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt
-INPUT capellini_ella_tutorial2.tex
+INPUT /Users/ellacapellini/Desktop/Learning in Deep Artificial and Biological neuronal Networks/Lesson 3/tutorial2_code/capellini_ella_tutorial2.tex
 OUTPUT capellini_ella_tutorial2.log
 INPUT /usr/local/texlive/2025/texmf-dist/tex/latex/base/article.cls
 INPUT /usr/local/texlive/2025/texmf-dist/tex/latex/base/article.cls
