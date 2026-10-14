@@ -1,3 +1,12 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{placeins}
+\usepackage[a4paper, margin=1.22in]{geometry}
+
 \begin{document}
 
 \begin{center}
@@ -5,14 +14,144 @@
 Ella Capellini \quad | \quad ecapellini@student.ethz.ch
 \end{center}
 
+\section*{Introduction}
+
+Backpropagation (BP) sends the error backwards through the network with the transpose of the forward weights, $\delta_h = W^T \delta_{out}$. 
+In feedback alignment (FA) this $W^T$ is replaced by a fixed random matrix $B$, so $\delta_h = B\,\delta_{out}$. 
+This looks like it should not work, because $B$ has nothing to do with the task. 
+\emph{why does a random $B$ still give a useful learning signal?} The answer will be that the forward weights $W$ adapt during training, so that $W^T$ becomes similar to $B$. 
+I measure this with the angle between $B$ and $W^T$. In the three experiments below I first check whether this alignment happens (linear network), then whether it still happens with a nonlinearity and what it costs compared to BP, and finally what kind of solution BP and FA find in a long run.
+
+%------------------------------------------------------------
+\section*{Linear case}
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=0.48\textwidth,height=0.3\textheight,keepaspectratio]{plots/lin_0.png}
+\caption{Angle between $B$ and $W^T$ in the linear network.}
+\end{figure}
+\FloatBarrier
+
+\paragraph{Why a signal through $B$ can reduce the loss.} Let the network be $y = W W_0 x$ with hidden layer $W_0$ and error $\delta = y - t$. 
+The true gradient for $W_0$ is $W^T\delta\,x^T$, and FA uses the update $\Delta W_0 = -\eta\, B\delta\, x^T$ instead. 
+To first order, the change of the loss from this update is
+\[
+\Delta L = -\eta\,\bigl(\delta^T W B\,\delta\bigr)\,\lVert x\rVert^2 .
+\]
+So the loss goes down whenever $\delta^T W B\,\delta > 0$. 
+This is the case if $WB$ is roughly positive, which is what a small angle between $B$ and $W^T$ means (angle below $90^\circ$). 
+In this case the FA update is not the gradient, but it has a positive overlap with it, so it still moves downhill.
+
+\paragraph{What the plot shows.} At the beginning the angle is about $72^\circ$, so $B$ and $W^T$ are almost unrelated. 
+Within roughly 30 epochs it drops to about $34^\circ$ and then stays there. At the same time the loss goes down (0.054 after 10 epochs, 0.0048 after 200), so the hidden layer does get a useful signal.
+
+\paragraph{Why the angle becomes small.} In the beginning only the output layer $W$ gets the exact error. 
+The hidden weights are updated with $B\delta$, so the hidden activity $h = W_0 x$ gets a part proportional to $-B\delta$. 
+The update of the output weights is $\Delta W = -\eta\,\delta\, h^T$. Putting in the part of $h$ that comes from $B$, this gives a term that looks like $+\eta^2 (x\cdot x')\,\delta'\delta^T B^T$ (for an error $\delta'$ on a later sample $x'$). 
+Averaged over the samples, $\delta'\delta^T$ behaves like a positive matrix and $x\cdot x'$ is mostly positive, so this term points roughly along $B^T$. 
+So $W$ is pushed towards $B^T$ by its own learning rule. The angle stops at $34^\circ$ and not at $0^\circ$ for two reasons, I think. 
+First, $W$ has 2 jobs: 
+\begin{enumerate}
+    \item it has to align with $B^T$ and it has to solve the task
+    \item when the error gets small, both updates get small, so the alignment stops changing.
+\end{enumerate}
+
+\paragraph{[Optional] Does the hidden layer need feedback?} I think yes. The whole network is one linear map from 30 inputs to 10 outputs, but a random fixed hidden layer with 20 units only sees 20 random directions of the 30 inputs. 
+I tested this by training only the output layer on a fixed random hidden layer (least squares with bias): the test error was 0.037. 
+FA reaches 0.0077, which is the same as the best linear fit on all 30 inputs. So the hidden layer must learn something, and it can only do this because the feedback is useful.
+
+%------------------------------------------------------------
+\section*{Nonlinear case}
+
+The next question is whether the same thing happens when the hidden layer has a sigmoid. 
+Now the FA signal is $\delta_h = (B\delta_{out})\odot\sigma'(z)$. The factor $\sigma'(z)$ is positive, so it changes the size of the signal but not the sign of each component. 
+I would therefore expect the same argument to work.
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth,height=0.28\textheight,keepaspectratio]{plots/nl_fa_0.png}
+\caption{$B$ and $W^T$}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth,height=0.28\textheight,keepaspectratio]{plots/nl_fa_1.png}
+\caption{$B$ and $W^\dagger$}
+\end{subfigure}
+\caption{Angles in the nonlinear network with FA.}
+\end{figure}
+\FloatBarrier
+
+The plots confirm this. Both angles start close to $90^\circ$ (about $97^\circ$ and $83^\circ$) and go down to about $38^\circ$ and $35^\circ$, and the test error is 0.0126. 
+So FA also works with a nonlinearity. The alignment is slower than in the linear case. The two runs also used different learning rates (0.1 and 0.3), so I checked this by running both networks with learning rate 0.1. 
+The angle between $B$ and $W^T$ needs 8 epochs to get below $45^\circ$ in the linear network and 84 epochs in the nonlinear one, so the nonlinearity itself makes it about 10 times slower. 
+With learning rate 0.3 the nonlinear network needs 29 epochs, so the time scales roughly with $1/\text{lr}$. This fits the idea that the sigmoid makes the signals smaller ($\sigma'\le 0.25$), but I did not test the derivative directly.
+
+The angle with the pseudo-inverse first goes up a little (to about $68^\circ$) before it goes down. 
+I looked at the singular values of $W$ for this. At the beginning the ratio between the largest and the smallest one is large (about 230 in epoch 1 and still about 100 in epoch 17, only about 45 in epoch 31 and about 6 at the end). 
+The pseudo-inverse is dominated by the smallest singular values, which belong to the directions that are not yet aligned. So $W^\dagger$ can only align with $B$ after $W$ has become better conditioned, which is later than for $W^T$. This matches the plots, but it is only an explanation from one run.
+
+\paragraph{[Optional] Why does $W$ align with $B^T$ and $B^\dagger$ at the same time?} $W$ has the same shape as $B^T$. If $W\approx c\,B^T$, then $W^\dagger \approx B(B^TB)^{-1}/c$. For a random $B$ with 20 rows and 10 columns, $B^TB$ is close to a multiple of the identity, so $W^\dagger$ is roughly a multiple of $B$. 
+So these two alignments are almost the same thing, and the two plots end at similar angles.
+
+\paragraph{Comparison with BP.} In BP the angle is $0^\circ$ by definition, and the results are a bit better: the test error is 0.0092 compared to 0.0126 for FA, and BP is faster at the start (loss 0.037 after 10 epochs against 0.109). 
+This fits the picture from above. At the beginning $B$ and $W^T$ are almost orthogonal, so the hidden layer learns little until the alignment has developed, while BP has the exact signal from the first step. 
+Even at the end the angle is still about $35^\circ$, so the FA signal is only an approximation of the gradient.
+
+%------------------------------------------------------------
+\section*{Polynomial fitting}
+
+In the last experiment I train for many more epochs on a small, noisy dataset (20 points of a cubic with noise), to see what solutions the two methods find. 
+Since FA does not follow the exact gradient, it is interesting whether this makes a difference for overfitting.
+
+\begin{figure}[!htbp]
+\centering
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth,height=0.28\textheight,keepaspectratio]{plots/poly_fa_0.png}
+\caption{Feedback alignment}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+\includegraphics[width=\textwidth,height=0.28\textheight,keepaspectratio]{plots/poly_bp_0.png}
+\caption{Backpropagation}
+\end{subfigure}
+\caption{Polynomial regression after 20000 epochs.}
+\end{figure}
+\FloatBarrier
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+ & training loss & test error \\
+\midrule
+FA & 2.77 & 1.39 \\
+BP & 1.94 & 2.63 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Both methods learn the cubic shape. BP reaches the lower training loss, but its test error is higher, and its curve has bumps (for example around $x=-2$ and $x=3.5$): it follows single noisy training points, which is overfitting. 
+The FA curve is smoother and closer to the true cubic, even though its training loss is higher. I repeated the experiment with three other seeds and FA had the lower test error every time (0.94 to 1.74 for FA, 3.27 to 3.47 for BP), so this is not just luck.
+
+A possible explanation connects to the previous sections. In FA the forward weights have to do two things at once: reduce the error and align with $B$. This restricts how freely the network can fit the noise, so FA acts a bit like a regularizer. 
+I cannot fully prove this, because the two methods use different learning rates in the sheet (0.2 for FA and 0.02 for BP). I tried swapping them, but then neither trained well (BP with 0.2 reached a test error of about 131, FA with 0.02 about 53 after 20000 epochs), so a comparison with the same learning rate was not possible.
+
+\paragraph{[Optional] Possible improvement.} The alignment at the beginning is the slow part. One idea is to let $B$ move slowly towards $W^T$ instead of keeping it fixed. This would speed up the alignment, but it would make the feedback less ``random'' and closer to using the weights themselves.
+
+%------------------------------------------------------------
+\section*{Summary}
+
+FA works because the forward weights learn to align with the random feedback matrix. 
+The error signal through $B$ then has a positive overlap with the real gradient, and the loss goes down. 
+This alignment happens in the linear and in the nonlinear network, but it takes some epochs and is never perfect, which is why FA is a bit slower and slightly worse than BP on the student-teacher task. 
+On the noisy polynomial task the same imperfection seems to help, because FA overfits less than BP.
+
+%------------------------------------------------------------
 \section*{Implementation}
 
-Only the \texttt{forward()} and \texttt{backward()} functions were filled in.
-$A$ is the input (batch $\times$ input size), $W$ the weights, $b$ the bias, $Z$ the output.
-$\delta_X$ is the gradient of the loss with respect to $X$.
+Only \texttt{forward()} and \texttt{backward()} were filled in. $A$ is the input, $W$ the weights, $b$ the bias, $Z$ the output and $\delta_X$ is the gradient of the loss with respect to $X$.
 
-\paragraph{Linear layer} $Z = A W^T + b$, with
-$\delta_A = \delta_Z W$, \quad $\delta_W = \delta_Z^T A$, \quad $\delta_b = \sum_{\text{batch}} \delta_Z$.
+\textbf{Linear layer:} $Z = AW^T + b$, $\;\delta_A = \delta_Z W$, $\;\delta_W = \delta_Z^T A$, $\;\delta_b = \sum \delta_Z$ over the batch.
 \begin{lstlisting}
 # forward
 Z = A @ W.t()
@@ -24,7 +163,7 @@ grad_W = grad_Z.t() @ A
 grad_b = grad_Z.sum(dim=0)
 \end{lstlisting}
 
-\paragraph{Sigmoid} $A = \sigma(Z)$, with $\delta_Z = \delta_A \odot \sigma(Z)\,(1-\sigma(Z))$.
+\textbf{Sigmoid:} $A = \sigma(Z)$, $\;\delta_Z = \delta_A \odot \sigma(Z)(1-\sigma(Z))$.
 \begin{lstlisting}
 # forward
 A = torch.sigmoid(Z)
@@ -33,8 +172,7 @@ s = torch.sigmoid(Z)
 grad_Z = grad_A * s * (1 - s)
 \end{lstlisting}
 
-\paragraph{MSE loss} $L = \frac{1}{B}\sum_{b} \frac12 \lVert A_b - T_b \rVert^2$, with
-$\delta_A = \frac{1}{B}(A-T)$ and $\delta_T = -\frac{1}{B}(A-T)$ (multiplied by the incoming gradient \texttt{grad\_L}).
+\textbf{MSE loss:} $L = \frac{1}{B}\sum_b \frac12\lVert A_b - T_b\rVert^2$, $\;\delta_A = \frac1B (A-T)$, $\;\delta_T = -\frac1B (A-T)$.
 \begin{lstlisting}
 # forward
 L = 0.5 * ((A - T) ** 2).sum() / A.shape[0]
@@ -44,18 +182,12 @@ grad_T = -grad_L * (A - T) / A.shape[0]
 return grad_A, grad_T
 \end{lstlisting}
 
-\paragraph{Linear layer with feedback alignment} The forward pass is the same as above.
-In the backward pass, the error sent to the previous layer uses the fixed random matrix $B$
-instead of $W$: $\delta_A = \delta_Z B^T$. The updates $\delta_W$ and $\delta_b$ are the same as in backprop.
+\textbf{Linear layer for FA:} the forward pass is the same. In the backward pass the error for the previous layer is sent back with $B$ instead of $W$: $\delta_A = \delta_Z B^T$.
 \begin{lstlisting}
 # backward
 grad_A = grad_Z @ B.t()
 grad_W = grad_Z.t() @ A
 grad_b = grad_Z.sum(dim=0)
 \end{lstlisting}
-
-All given tests pass. I also compared my gradients with PyTorch's \texttt{gradcheck}.
-
-
 
 \end{document}
