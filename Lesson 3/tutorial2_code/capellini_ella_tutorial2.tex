@@ -1,0 +1,61 @@
+\begin{document}
+
+\begin{center}
+{\Large \textbf{Exercise Sheet 2: Backpropagation and Feedback Alignment}}\\[4pt]
+Ella Capellini \quad | \quad ecapellini@student.ethz.ch
+\end{center}
+
+\section*{Implementation}
+
+Only the \texttt{forward()} and \texttt{backward()} functions were filled in.
+$A$ is the input (batch $\times$ input size), $W$ the weights, $b$ the bias, $Z$ the output.
+$\delta_X$ is the gradient of the loss with respect to $X$.
+
+\paragraph{Linear layer} $Z = A W^T + b$, with
+$\delta_A = \delta_Z W$, \quad $\delta_W = \delta_Z^T A$, \quad $\delta_b = \sum_{\text{batch}} \delta_Z$.
+\begin{lstlisting}
+# forward
+Z = A @ W.t()
+if b is not None:
+    Z = Z + b
+# backward
+grad_A = grad_Z @ W
+grad_W = grad_Z.t() @ A
+grad_b = grad_Z.sum(dim=0)
+\end{lstlisting}
+
+\paragraph{Sigmoid} $A = \sigma(Z)$, with $\delta_Z = \delta_A \odot \sigma(Z)\,(1-\sigma(Z))$.
+\begin{lstlisting}
+# forward
+A = torch.sigmoid(Z)
+# backward
+s = torch.sigmoid(Z)
+grad_Z = grad_A * s * (1 - s)
+\end{lstlisting}
+
+\paragraph{MSE loss} $L = \frac{1}{B}\sum_{b} \frac12 \lVert A_b - T_b \rVert^2$, with
+$\delta_A = \frac{1}{B}(A-T)$ and $\delta_T = -\frac{1}{B}(A-T)$ (multiplied by the incoming gradient \texttt{grad\_L}).
+\begin{lstlisting}
+# forward
+L = 0.5 * ((A - T) ** 2).sum() / A.shape[0]
+# backward
+grad_A = grad_L * (A - T) / A.shape[0]
+grad_T = -grad_L * (A - T) / A.shape[0]
+return grad_A, grad_T
+\end{lstlisting}
+
+\paragraph{Linear layer with feedback alignment} The forward pass is the same as above.
+In the backward pass, the error sent to the previous layer uses the fixed random matrix $B$
+instead of $W$: $\delta_A = \delta_Z B^T$. The updates $\delta_W$ and $\delta_b$ are the same as in backprop.
+\begin{lstlisting}
+# backward
+grad_A = grad_Z @ B.t()
+grad_W = grad_Z.t() @ A
+grad_b = grad_Z.sum(dim=0)
+\end{lstlisting}
+
+All given tests pass. I also compared my gradients with PyTorch's \texttt{gradcheck}.
+
+
+
+\end{document}
